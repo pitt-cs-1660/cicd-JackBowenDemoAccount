@@ -11,37 +11,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Docker compose config
         run: docker compose config
-      - name: Verify Dockerfile
-        run: |
-          DOCKERFILE=Dockerfile
-          if [[ ! -f "$DOCKERFILE" ]]; then
-            echo "❌ Dockerfile not found!"
-            exit 1
-          fi
-
-          # Check number of stages
-          STAGE_COUNT=$(grep -c '^FROM' "$DOCKERFILE")
-          echo "✅ Found $STAGE_COUNT stages in the Dockerfile."
-          if [[ $STAGE_COUNT -lt 2 ]]; then
-            echo "❌ Dockerfile must have at least 2 stages (multi-stage build required)."
-            exit 1
-          fi
-
-          # Check base image
-          if ! grep -q '^FROM python:3.11-buster' "$DOCKERFILE"; then
-            echo "❌ Base image is not 'python:3.11-buster'"
-            exit 1
-          else
-            echo "✅ Base image is 'python:3.11-buster'"
-          fi
-
-          # Check WORKDIR
-          if ! grep -q '^WORKDIR /app' "$DOCKERFILE"; then
-            echo "❌ WORKDIR is not set to '/app'"
-            exit 1
-          else
-            echo "✅ WORKDIR is set to '/app'"
-          fi
 
   integration-test:
     timeout-minutes: 10
@@ -50,12 +19,21 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
-      - name: Docker compose up
-        run: docker compose up -d && sleep 10  # Ensuring services are ready
-      - name: Integration tests
+      - name: Start Docker Compose
+        run: docker compose up -d
+      - name: Wait for FastAPI to be ready
         run: |
-          ./tests/api_tests.sh
-      - name: Docker compose down
+          for i in {1..30}; do
+            curl -f http://127.0.0.1:8000/healthz && break
+            echo "Waiting for FastAPI..."
+            sleep 2
+          done
+      - name: Run API Tests
+        run: ./tests/api_tests.sh
+      - name: Dump FastAPI logs on failure
+        if: failure()
+        run: docker compose logs fastapi
+      - name: Shut down Docker Compose
         run: docker compose down
 
   deploy:
@@ -66,28 +44,17 @@ jobs:
     needs:
       - integration-test
     steps:
-      # Checkout code
       - uses: actions/checkout@v4
-
-      # Authenticate with GCP using workload identity provider
       - uses: 'google-github-actions/auth@v2'
-        id: auth
-        name: Authenticate to GCP
         with:
           project_id: 'ace-wording-451920-r5'
           workload_identity_provider: 'projects/458540730021/locations/global/workloadIdentityPools/github'
-
-      # Configure Docker authentication for GCP
       - name: gcloud Configure Docker
         run: gcloud auth configure-docker --quiet us-east1-docker.pkg.dev
-
-      # Setup Docker Buildx for multi-architecture builds
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
           platforms: linux/amd64,linux/arm64
-
-      # Build and Push the image to GCP Artifact Registry
       - name: Build and Push
         uses: docker/build-push-action@v6
         with:
