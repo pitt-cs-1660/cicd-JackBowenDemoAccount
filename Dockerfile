@@ -18,7 +18,9 @@ COPY --from=builder /app /app
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
+RUN pip install --upgrade pip && poetry install --no-root --no-interaction --no-ansi
+
 EXPOSE 8000
 
 ENTRYPOINT ["/app/entrypoint.sh"]
-CMD ["uvicorn", "cc_compose.server:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "cc_compose.server:app", "--host", "0.0.0.0", "--port", "8000"]
