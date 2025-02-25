@@ -82,6 +82,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        
+      - name: Debug GitHub Claims
+        run: |
+          echo "ACTOR=${{ github.actor }}"
+          echo "REPOSITORY_OWNER=${{ github.repository_owner }}"
+          echo "REPOSITORY=${{ github.repository }}"
 
       - name: Authenticate with GCP using Workload Identity Federation
         uses: 'google-github-actions/auth@v2'
