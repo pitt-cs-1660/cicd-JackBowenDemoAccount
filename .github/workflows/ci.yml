@@ -11,6 +11,37 @@ jobs:
         uses: actions/checkout@v4
       - name: Docker compose config
         run: docker compose config
+      - name: Verify Dockerfile
+        run: |
+          DOCKERFILE=Dockerfile
+          if [[ ! -f "$DOCKERFILE" ]]; then
+            echo "❌ Dockerfile not found!"
+            exit 1
+          fi
+      
+          # Check number of stages
+          STAGE_COUNT=$(grep -c '^FROM' "$DOCKERFILE")
+          echo "✅ Found $STAGE_COUNT stages in the Dockerfile."
+          if [[ $STAGE_COUNT -lt 2 ]]; then
+            echo "❌ Dockerfile must have at least 2 stages (multi-stage build required)."
+            exit 1
+          fi
+      
+          # Check base image
+          if ! grep -q '^FROM python:3.11-buster' "$DOCKERFILE"; then
+            echo "❌ Base image is not 'python:3.11-buster'"
+            exit 1
+          else
+            echo "✅ Base image is 'python:3.11-buster'"
+          fi
+      
+          # Check WORKDIR
+          if ! grep -q '^WORKDIR /app' "$DOCKERFILE"; then
+            echo "❌ WORKDIR is not set to '/app'"
+            exit 1
+          else
+            echo "✅ WORKDIR is set to '/app'"
+          fi
 
   integration-test:
     timeout-minutes: 10
@@ -19,20 +50,25 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
       - name: Start Docker Compose
         run: docker compose up -d
+
       - name: Wait for FastAPI to be ready
         run: |
           for i in {1..30}; do
             curl -f http://127.0.0.1:8000/healthz && break
             echo "Waiting for FastAPI..."
             sleep 2
-          done
+          done || (echo "FastAPI did not start" && exit 1)
+
       - name: Run API Tests
         run: ./tests/api_tests.sh
+
       - name: Dump FastAPI logs on failure
         if: failure()
         run: docker compose logs fastapi
+
       - name: Shut down Docker Compose
         run: docker compose down
 
