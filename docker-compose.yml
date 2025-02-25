@@ -1,5 +1,7 @@
 services:
   fastapi:
+    working_dir: /app
+    ### Add build context instruction here
     build:
       context: .
     healthcheck:
@@ -7,11 +9,14 @@ services:
       interval: 10s
       timeout: 60s
       retries: 5
+    ### Add environment variables here
     environment:
-      DATABASE_URL: "postgresql://postgres:postgrespassword@postgres:5432/tasksdb?sslmode=disable"
+      DATABASE_URL: "postgresql://postgres:postgrespassword@postgres:5432/tasksdb"
+
+    ### Add depends postgres here
     depends_on:
-      postgres:
-        condition: service_healthy
+      - postgres
+    ### expose ports here
     ports:
       - "8000:8000"
     volumes:
